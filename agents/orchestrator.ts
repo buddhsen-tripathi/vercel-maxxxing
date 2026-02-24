@@ -22,7 +22,7 @@ async function runSingleAgent(
 ): Promise<AgentReviewResult> {
   try {
     const { output } = await generateText({
-      model: gateway("anthropic/claude-sonnet-4-5"),
+      model: gateway("openai/gpt-5-nano"),
       system: agentConfigs[agent],
       prompt: `Review the following code:\n\n${codeInput}`,
       output: Output.object({ schema: agentResultSchema }),
