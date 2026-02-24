@@ -2,7 +2,7 @@ import { getSessionCookie } from "better-auth/cookies";
 import { NextRequest, NextResponse } from "next/server";
 
 const authRoutes = ["/login", "/signup"];
-const protectedRoutes = ["/dashboard", "/history"];
+const protectedRoutes = ["/dashboard"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -28,5 +28,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/history/:path*", "/login", "/signup"],
+  matcher: ["/dashboard/:path*", "/login", "/signup"],
 };
