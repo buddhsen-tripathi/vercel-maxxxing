@@ -4,7 +4,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { AgentCard } from "./agent-card";
+import { FollowUpChat } from "./follow-up-chat";
 import type { AgentReviewResult } from "@/agents/schemas";
+import type { ChatMessage } from "@/hooks/use-follow-up-chat";
 
 const agentTabs: { value: string; label: string }[] = [
   { value: "all", label: "All" },
@@ -18,9 +20,17 @@ interface ReviewPanelProps {
   agents: string[];
   results: AgentReviewResult[];
   isReviewing: boolean;
+  conversationId?: string | null;
+  followUpMessages?: ChatMessage[];
 }
 
-export function ReviewPanel({ agents, results, isReviewing }: ReviewPanelProps) {
+export function ReviewPanel({
+  agents,
+  results,
+  isReviewing,
+  conversationId,
+  followUpMessages,
+}: ReviewPanelProps) {
   if (!isReviewing && results.length === 0) {
     return (
       <div className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
@@ -78,6 +88,11 @@ export function ReviewPanel({ agents, results, isReviewing }: ReviewPanelProps) 
               {tab.label}
             </TabsTrigger>
           ))}
+          {conversationId && !isReviewing && (
+            <TabsTrigger value="chat" className="text-xs">
+              Chat
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="all" className="flex-1 overflow-hidden">
@@ -117,6 +132,15 @@ export function ReviewPanel({ agents, results, isReviewing }: ReviewPanelProps) 
             </ScrollArea>
           </TabsContent>
         ))}
+
+        {conversationId && (
+          <TabsContent value="chat" className="flex-1 overflow-hidden">
+            <FollowUpChat
+              conversationId={conversationId}
+              initialMessages={followUpMessages}
+            />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

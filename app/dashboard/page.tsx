@@ -2,21 +2,45 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import { ChatInput } from "@/components/chat/chat-input";
+import { CommitInput } from "@/components/chat/commit-input";
 import { CodeBlock } from "@/components/review/code-block";
+import { CommitInfo } from "@/components/review/commit-info";
 import { ReviewPanel } from "@/components/review/review-panel";
 import { useReview } from "@/hooks/use-review";
 import type { AgentReviewResult } from "@/agents/schemas";
+import type { CommitMeta } from "@/hooks/use-review";
+import type { ChatMessage } from "@/hooks/use-follow-up-chat";
 
 export default function DashboardPage() {
   const searchParams = useSearchParams();
   const conversationId = searchParams.get("id");
 
+  const [inputMode, setInputMode] = useState<"code" | "commit">("code");
   const [input, setInput] = useState("");
-  const { results, agents, isReviewing, submitReview } = useReview();
+  const {
+    results,
+    agents,
+    isReviewing,
+    commitMeta,
+    conversationId: liveConversationId,
+    submitReview,
+    submitCommitReview,
+  } = useReview();
   const [submittedCode, setSubmittedCode] = useState<string | null>(null);
   const [loadedResults, setLoadedResults] = useState<AgentReviewResult[]>([]);
+  const [loadedCommitMeta, setLoadedCommitMeta] = useState<CommitMeta | null>(
+    null
+  );
+  const [loadedFollowUpMessages, setLoadedFollowUpMessages] = useState<
+    ChatMessage[]
+  >([]);
 
   // Load existing conversation
   useEffect(() => {
@@ -26,23 +50,39 @@ export default function DashboardPage() {
       .then((data) => {
         if (data.code) setSubmittedCode(data.code);
         if (data.results) setLoadedResults(data.results);
+        if (data.commitMeta) setLoadedCommitMeta(data.commitMeta);
+        if (data.followUpMessages) setLoadedFollowUpMessages(data.followUpMessages);
       })
       .catch(() => {});
   }, [conversationId]);
 
-  const handleSubmit = useCallback(() => {
+  const handleCodeSubmit = useCallback(() => {
     if (!input.trim() || isReviewing) return;
     setSubmittedCode(input);
     setLoadedResults([]);
+    setLoadedCommitMeta(null);
+    setLoadedFollowUpMessages([]);
     submitReview(input);
     setInput("");
   }, [input, isReviewing, submitReview]);
 
+  const handleCommitSubmit = useCallback(
+    (commitUrl: string) => {
+      if (isReviewing) return;
+      setSubmittedCode(null);
+      setLoadedResults([]);
+      setLoadedCommitMeta(null);
+      setLoadedFollowUpMessages([]);
+      submitCommitReview(commitUrl);
+    },
+    [isReviewing, submitCommitReview]
+  );
+
   const displayResults = results.length > 0 ? results : loadedResults;
   const displayAgents =
-    agents.length > 0
-      ? agents
-      : displayResults.map((r) => r.agent);
+    agents.length > 0 ? agents : displayResults.map((r) => r.agent);
+  const displayCommitMeta = commitMeta ?? loadedCommitMeta;
+  const activeConversationId = liveConversationId ?? conversationId;
   const hasResults = displayResults.length > 0 || isReviewing;
 
   return (
@@ -50,7 +90,14 @@ export default function DashboardPage() {
       {/* Desktop layout */}
       <div className="hidden h-full md:flex">
         <div className="flex flex-[6] flex-col">
-          {submittedCode ? (
+          {displayCommitMeta ? (
+            <div className="flex-1 overflow-auto p-4">
+              <h3 className="mb-3 text-sm font-medium text-muted-foreground">
+                Commit Review
+              </h3>
+              <CommitInfo commit={displayCommitMeta} />
+            </div>
+          ) : submittedCode ? (
             <div className="flex-1 overflow-auto p-4">
               <h3 className="mb-3 text-sm font-medium text-muted-foreground">
                 Submitted Code
@@ -60,10 +107,13 @@ export default function DashboardPage() {
           ) : (
             <EmptyState />
           )}
-          <ChatInput
-            value={input}
-            onChange={setInput}
-            onSubmit={handleSubmit}
+          <InputArea
+            mode={inputMode}
+            onModeChange={setInputMode}
+            codeValue={input}
+            onCodeChange={setInput}
+            onCodeSubmit={handleCodeSubmit}
+            onCommitSubmit={handleCommitSubmit}
             disabled={isReviewing}
           />
         </div>
@@ -72,6 +122,8 @@ export default function DashboardPage() {
             agents={displayAgents}
             results={displayResults}
             isReviewing={isReviewing}
+            conversationId={activeConversationId}
+            followUpMessages={loadedFollowUpMessages}
           />
         </div>
       </div>
@@ -94,19 +146,26 @@ export default function DashboardPage() {
             value="code"
             className="flex flex-1 flex-col overflow-hidden"
           >
-            {submittedCode ? (
+            {displayCommitMeta ? (
+              <div className="flex-1 overflow-auto p-4">
+                <CommitInfo commit={displayCommitMeta} />
+              </div>
+            ) : submittedCode ? (
               <div className="flex-1 overflow-auto p-4">
                 <CodeBlock code={submittedCode} />
               </div>
             ) : (
               <div className="flex flex-1 items-center justify-center text-muted-foreground">
-                <p className="text-sm">Paste code below</p>
+                <p className="text-sm">Paste code or enter a commit URL below</p>
               </div>
             )}
-            <ChatInput
-              value={input}
-              onChange={setInput}
-              onSubmit={handleSubmit}
+            <InputArea
+              mode={inputMode}
+              onModeChange={setInputMode}
+              codeValue={input}
+              onCodeChange={setInput}
+              onCodeSubmit={handleCodeSubmit}
+              onCommitSubmit={handleCommitSubmit}
               disabled={isReviewing}
             />
           </TabsContent>
@@ -116,11 +175,55 @@ export default function DashboardPage() {
               agents={displayAgents}
               results={displayResults}
               isReviewing={isReviewing}
+              conversationId={activeConversationId}
+              followUpMessages={loadedFollowUpMessages}
             />
           </TabsContent>
         </Tabs>
       </div>
     </>
+  );
+}
+
+function InputArea({
+  mode,
+  onModeChange,
+  codeValue,
+  onCodeChange,
+  onCodeSubmit,
+  onCommitSubmit,
+  disabled,
+}: {
+  mode: "code" | "commit";
+  onModeChange: (mode: "code" | "commit") => void;
+  codeValue: string;
+  onCodeChange: (v: string) => void;
+  onCodeSubmit: () => void;
+  onCommitSubmit: (url: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div>
+      <Tabs
+        value={mode}
+        onValueChange={(v) => onModeChange(v as "code" | "commit")}
+      >
+        <TabsList className="mx-4 mt-2 mb-0">
+          <TabsTrigger value="code">Paste Code</TabsTrigger>
+          <TabsTrigger value="commit">Commit URL</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      {mode === "code" ? (
+        <ChatInput
+          value={codeValue}
+          onChange={onCodeChange}
+          onSubmit={onCodeSubmit}
+          disabled={disabled}
+        />
+      ) : (
+        <CommitInput onSubmit={onCommitSubmit} disabled={disabled} />
+      )}
+    </div>
   );
 }
 
@@ -130,7 +233,8 @@ function EmptyState() {
       <div className="text-center">
         <p className="text-lg font-medium">Multi-Agent Code Review</p>
         <p className="mt-1 text-sm">
-          Paste code below to get parallel analysis from 4 AI agents
+          Paste code or enter a GitHub commit URL to get parallel analysis from
+          4 AI agents
         </p>
       </div>
     </div>

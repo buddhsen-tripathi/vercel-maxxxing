@@ -23,6 +23,8 @@ export async function GET(req: NextRequest) {
   }
 
   const messages = await getMessagesByConversation(id);
+
+  // First user + assistant pair are the original review
   const userMessage = messages.find((m) => m.role === "user");
   const assistantMessage = messages.find((m) => m.role === "assistant");
 
@@ -35,9 +37,44 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Extract commit metadata from user message if present
+  let commitMeta = null;
+  if (userMessage?.metadata) {
+    try {
+      const parsed = JSON.parse(userMessage.metadata);
+      commitMeta = parsed.commitMeta ?? null;
+    } catch {
+      // Invalid JSON
+    }
+  }
+
+  // Follow-up messages: everything after the first user+assistant pair
+  const followUpMessages: { id: string; role: string; content: string }[] = [];
+  let skippedUser = false;
+  let skippedAssistant = false;
+  for (const msg of messages) {
+    if (!skippedUser && msg.role === "user") {
+      skippedUser = true;
+      continue;
+    }
+    if (!skippedAssistant && msg.role === "assistant") {
+      skippedAssistant = true;
+      continue;
+    }
+    if (skippedUser && skippedAssistant) {
+      followUpMessages.push({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+      });
+    }
+  }
+
   return Response.json({
     conversation,
     code: userMessage?.content ?? null,
     results,
+    commitMeta,
+    followUpMessages: followUpMessages.length > 0 ? followUpMessages : undefined,
   });
 }

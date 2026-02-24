@@ -15,7 +15,7 @@ export const findingSchema = z.object({
   title: z.string().describe("Short title summarizing the finding"),
   description: z.string().describe("Detailed explanation of the issue"),
   suggestion: z.string().describe("Actionable fix or improvement recommendation"),
-  lineReference: z.string().optional().describe("Relevant line number or range, e.g. 'line 15' or 'lines 20-25'"),
+  lineReference: z.string().nullable().describe("Relevant line number or range, e.g. 'line 15' or 'lines 20-25'"),
 });
 export type Finding = z.infer<typeof findingSchema>;
 
