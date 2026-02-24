@@ -19,14 +19,17 @@ export function ChatMessages({ messages }: ChatMessagesProps) {
   if (messages.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center text-muted-foreground">
-        <p>Paste code to start a review</p>
+        <div className="text-center">
+          <p className="text-lg font-medium">Code Review</p>
+          <p className="mt-1 text-sm">Paste your code to get started</p>
+        </div>
       </div>
     );
   }
 
   return (
     <ScrollArea className="flex-1 p-4">
-      <div className="space-y-4">
+      <div className="mx-auto max-w-3xl space-y-4">
         {messages.map((message) => (
           <MessageBubble key={message.id} message={message} />
         ))}

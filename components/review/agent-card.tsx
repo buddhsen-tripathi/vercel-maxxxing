@@ -2,13 +2,15 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { FindingItem } from "./finding-item";
 import type { AgentReviewResult } from "@/agents/schemas";
 
-const agentLabels: Record<string, string> = {
-  "code-reviewer": "Code Reviewer",
-  security: "Security",
-  performance: "Performance",
-  testing: "Testing",
+const agentLabels: Record<string, { label: string; icon: string }> = {
+  "code-reviewer": { label: "Code Reviewer", icon: "CR" },
+  security: { label: "Security", icon: "SC" },
+  performance: { label: "Performance", icon: "PF" },
+  testing: { label: "Testing", icon: "TS" },
 };
 
 interface AgentCardProps {
@@ -18,16 +20,27 @@ interface AgentCardProps {
 }
 
 export function AgentCard({ agentName, result, isLoading }: AgentCardProps) {
-  const label = agentLabels[agentName] ?? agentName;
+  const config = agentLabels[agentName] ?? {
+    label: agentName,
+    icon: "??",
+  };
 
   if (isLoading) {
     return (
       <Card className="animate-pulse">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">{label}</CardTitle>
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded bg-muted text-[10px] font-bold">
+              {config.icon}
+            </div>
+            <CardTitle className="text-sm">{config.label}</CardTitle>
+          </div>
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-muted-foreground">Analyzing...</p>
+          <div className="space-y-2">
+            <div className="h-2 w-3/4 rounded bg-muted" />
+            <div className="h-2 w-1/2 rounded bg-muted" />
+          </div>
         </CardContent>
       </Card>
     );
@@ -37,9 +50,14 @@ export function AgentCard({ agentName, result, isLoading }: AgentCardProps) {
 
   if (result.error) {
     return (
-      <Card>
+      <Card className="border-destructive/50">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">{label}</CardTitle>
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded bg-destructive/10 text-[10px] font-bold text-destructive">
+              {config.icon}
+            </div>
+            <CardTitle className="text-sm">{config.label}</CardTitle>
+          </div>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-destructive">{result.error}</p>
@@ -51,60 +69,49 @@ export function AgentCard({ agentName, result, isLoading }: AgentCardProps) {
   const r = result.result;
   if (!r) return null;
 
-  const criticalCount = r.findings.filter(
-    (f) => f.severity === "critical"
-  ).length;
+  const scoreColor =
+    r.score >= 7 ? "text-green-500" : r.score >= 4 ? "text-yellow-500" : "text-red-500";
+
+  const criticalCount = r.findings.filter((f) => f.severity === "critical").length;
   const highCount = r.findings.filter((f) => f.severity === "high").length;
 
   return (
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">{label}</CardTitle>
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded bg-primary/10 text-[10px] font-bold text-primary">
+              {config.icon}
+            </div>
+            <CardTitle className="text-sm">{config.label}</CardTitle>
+          </div>
           <div className="flex items-center gap-2">
             {criticalCount > 0 && (
-              <Badge variant="destructive" className="text-[10px]">
+              <Badge className="bg-red-600 text-white text-[10px]">
                 {criticalCount} critical
               </Badge>
             )}
             {highCount > 0 && (
-              <Badge variant="destructive" className="text-[10px]">
+              <Badge className="bg-orange-500 text-white text-[10px]">
                 {highCount} high
               </Badge>
             )}
-            <Badge variant={r.score >= 7 ? "default" : "destructive"}>
+            <span className={`text-lg font-bold ${scoreColor}`}>
               {r.score}/10
-            </Badge>
+            </span>
           </div>
         </div>
+        <Progress value={r.score * 10} className="mt-2 h-1.5" />
       </CardHeader>
       <CardContent>
         <p className="mb-3 text-xs text-muted-foreground">{r.summary}</p>
-        <div className="space-y-3">
-          {r.findings.map((f, i) => (
-            <div key={i} className="border-l-2 border-muted pl-3">
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant={
-                    f.severity === "critical" || f.severity === "high"
-                      ? "destructive"
-                      : "secondary"
-                  }
-                  className="text-[10px]"
-                >
-                  {f.severity}
-                </Badge>
-                <span className="text-xs font-medium">{f.title}</span>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {f.description}
-              </p>
-              <p className="mt-1 text-xs text-primary">
-                Fix: {f.suggestion}
-              </p>
-            </div>
-          ))}
-        </div>
+        {r.findings.length > 0 && (
+          <div className="space-y-2">
+            {r.findings.map((f, i) => (
+              <FindingItem key={i} finding={f} />
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
