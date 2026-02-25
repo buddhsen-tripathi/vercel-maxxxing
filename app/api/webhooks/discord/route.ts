@@ -1,6 +1,5 @@
 import { getBot } from "@/lib/bot";
 import { handleSlashCommand } from "@/lib/discord-commands";
-import { verifyKey } from "discord-interactions";
 import { after } from "next/server";
 
 export const maxDuration = 60;
@@ -11,6 +10,34 @@ const INTERACTION_TYPE_APPLICATION_COMMAND = 2;
 const RESPONSE_PONG = 1;
 const RESPONSE_DEFERRED = 5; // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
 
+/** Verify Discord Ed25519 signature using Web Crypto API */
+async function verifyDiscordSignature(
+  body: Uint8Array,
+  signature: string,
+  timestamp: string,
+  publicKeyHex: string
+): Promise<boolean> {
+  try {
+    const publicKeyBytes = new Uint8Array(
+      publicKeyHex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
+    );
+    const key = await crypto.subtle.importKey(
+      "raw",
+      publicKeyBytes,
+      { name: "Ed25519" },
+      false,
+      ["verify"]
+    );
+    const signatureBytes = new Uint8Array(
+      signature.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16))
+    );
+    const message = new TextEncoder().encode(timestamp + new TextDecoder().decode(body));
+    return crypto.subtle.verify("Ed25519", key, signatureBytes, message);
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: Request) {
   const bot = getBot();
   if (!bot) {
@@ -20,9 +47,8 @@ export async function POST(request: Request) {
     );
   }
 
-  // Clone the request so we can read the body for slash command detection
-  // while still passing the original to the Chat SDK
-  const bodyBytes = await request.arrayBuffer();
+  const bodyBuffer = await request.arrayBuffer();
+  const bodyBytes = new Uint8Array(bodyBuffer);
   const bodyText = new TextDecoder().decode(bodyBytes);
 
   // Verify signature
@@ -34,8 +60,8 @@ export async function POST(request: Request) {
     return new Response("Missing signature", { status: 401 });
   }
 
-  const isValid = await verifyKey(
-    new Uint8Array(bodyBytes),
+  const isValid = await verifyDiscordSignature(
+    bodyBytes,
     signature,
     timestamp,
     publicKey
@@ -93,7 +119,7 @@ export async function POST(request: Request) {
   const reconstructed = new Request(request.url, {
     method: request.method,
     headers: request.headers,
-    body: bodyBytes,
+    body: bodyBuffer,
   });
 
   return bot.webhooks.discord(reconstructed, {
