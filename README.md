@@ -213,6 +213,8 @@ Agent results and commit metadata are stored as JSON in message metadata.
 
 The bot is optional. If `DISCORD_BOT_TOKEN`, `DISCORD_PUBLIC_KEY`, and `DISCORD_APPLICATION_ID` are set, the bot activates automatically.
 
+**[Add CodeReview Bot to your server](https://discord.com/oauth2/authorize?client_id=1475996370224545914&scope=bot+applications.commands)**
+
 ### Slash Commands
 
 | Command | Description |
