@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 const navItems = [
   { href: "/dashboard", label: "New Review" },
   { href: "/dashboard/history", label: "History" },
+  { href: "/dashboard/settings", label: "Settings" },
 ];
 
 export function Sidebar() {

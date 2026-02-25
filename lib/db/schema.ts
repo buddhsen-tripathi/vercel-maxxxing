@@ -74,3 +74,16 @@ export const message = pgTable("message", {
   metadata: text("metadata"), // JSON string for agent results
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
+
+export const discordLink = pgTable("discord_link", {
+  id: text("id").primaryKey(),
+  userId: text("userId")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  discordUserId: text("discordUserId").unique(),
+  discordUsername: text("discordUsername"),
+  code: text("code").unique(),
+  codeExpiresAt: timestamp("codeExpiresAt"),
+  linkedAt: timestamp("linkedAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
