@@ -47,14 +47,25 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 
 /** Send a follow-up message to a deferred interaction */
 async function followUp(ctx: CommandContext, content: string) {
-  await fetch(
+  // Discord enforces a 2000-char limit on message content
+  const truncated =
+    content.length > 1990
+      ? content.slice(0, 1990) + "\n…(truncated)"
+      : content;
+
+  const res = await fetch(
     `${DISCORD_API}/webhooks/${ctx.applicationId}/${ctx.token}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content: truncated }),
     }
   );
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[discord] followUp failed: ${res.status} ${body}`);
+  }
 }
 
 export async function handleSlashCommand(ctx: CommandContext) {
