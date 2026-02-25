@@ -33,7 +33,7 @@ interface CommandContext {
 }
 
 const DISCORD_API = "https://discord.com/api/v10";
-const REVIEW_TIMEOUT_MS = 55_000; // 55s — leave buffer before 60s function limit
+const REVIEW_TIMEOUT_MS = 120_000; // 120s — leave buffer before 300s function limit
 
 /** Race a promise against a timeout */
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {

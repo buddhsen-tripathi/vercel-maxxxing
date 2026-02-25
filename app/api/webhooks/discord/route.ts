@@ -2,7 +2,7 @@ import { getBot } from "@/lib/bot";
 import { handleSlashCommand } from "@/lib/discord-commands";
 import { after } from "next/server";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const INTERACTION_TYPE_PING = 1;
 const INTERACTION_TYPE_APPLICATION_COMMAND = 2;
