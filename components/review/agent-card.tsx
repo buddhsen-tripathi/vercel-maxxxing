@@ -2,16 +2,9 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { FindingItem } from "./finding-item";
-import type { AgentReviewResult } from "@/agents/schemas";
-
-const agentLabels: Record<string, { label: string; icon: string }> = {
-  "code-reviewer": { label: "Code Reviewer", icon: "CR" },
-  security: { label: "Security", icon: "SC" },
-  performance: { label: "Performance", icon: "PF" },
-  testing: { label: "Testing", icon: "TS" },
-};
+import type { AgentReviewResult, AgentName } from "@/agents/schemas";
+import { agentLabels } from "@/agents/constants";
 
 interface AgentCardProps {
   agentName: string;
@@ -20,7 +13,7 @@ interface AgentCardProps {
 }
 
 export function AgentCard({ agentName, result, isLoading }: AgentCardProps) {
-  const config = agentLabels[agentName] ?? {
+  const config = agentLabels[agentName as AgentName] ?? {
     label: agentName,
     icon: "??",
   };
@@ -70,13 +63,13 @@ export function AgentCard({ agentName, result, isLoading }: AgentCardProps) {
   if (!r) return null;
 
   const scoreColor =
-    r.score >= 7 ? "text-green-500" : r.score >= 4 ? "text-yellow-500" : "text-red-500";
+    r.score >= 7 ? "border-score-good text-score-good" : r.score >= 4 ? "border-score-ok text-score-ok" : "border-score-bad text-score-bad";
 
   const criticalCount = r.findings.filter((f) => f.severity === "critical").length;
   const highCount = r.findings.filter((f) => f.severity === "high").length;
 
   return (
-    <Card>
+    <Card className="animate-fade-in transition-shadow hover:shadow-md">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -87,28 +80,27 @@ export function AgentCard({ agentName, result, isLoading }: AgentCardProps) {
           </div>
           <div className="flex items-center gap-2">
             {criticalCount > 0 && (
-              <Badge className="bg-red-600 text-white text-[10px]">
+              <Badge className="bg-severity-critical text-severity-critical-foreground text-[10px]">
                 {criticalCount} critical
               </Badge>
             )}
             {highCount > 0 && (
-              <Badge className="bg-orange-500 text-white text-[10px]">
+              <Badge className="bg-severity-high text-severity-high-foreground text-[10px]">
                 {highCount} high
               </Badge>
             )}
-            <span className={`text-lg font-bold ${scoreColor}`}>
-              {r.score}/10
-            </span>
+            <div className={`flex h-9 w-9 items-center justify-center rounded-full border-2 ${scoreColor}`}>
+              <span className="text-sm font-bold">{r.score}</span>
+            </div>
           </div>
         </div>
-        <Progress value={r.score * 10} className="mt-2 h-1.5" />
       </CardHeader>
       <CardContent>
         <p className="mb-3 text-xs text-muted-foreground">{r.summary}</p>
         {r.findings.length > 0 && (
           <div className="space-y-2">
             {r.findings.map((f, i) => (
-              <FindingItem key={i} finding={f} />
+              <FindingItem key={`${f.severity}-${f.title}-${i}`} finding={f} />
             ))}
           </div>
         )}

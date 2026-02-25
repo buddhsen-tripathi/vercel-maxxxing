@@ -17,6 +17,7 @@ import { useReview } from "@/hooks/use-review";
 import type { AgentReviewResult } from "@/agents/schemas";
 import type { CommitMeta } from "@/hooks/use-review";
 import type { ChatMessage } from "@/hooks/use-follow-up-chat";
+import { Code2, Shield, Gauge, TestTube2 } from "lucide-react";
 
 export default function DashboardPage() {
   const searchParams = useSearchParams();
@@ -230,11 +231,17 @@ function InputArea({
 function EmptyState() {
   return (
     <div className="flex flex-1 items-center justify-center text-muted-foreground">
-      <div className="text-center">
-        <p className="text-lg font-medium">Multi-Agent Code Review</p>
-        <p className="mt-1 text-sm">
+      <div className="text-center max-w-sm">
+        <div className="mb-6 flex justify-center gap-4">
+          <Code2 className="h-8 w-8 animate-fade-in opacity-60" style={{ animationDelay: "0ms" }} />
+          <Shield className="h-8 w-8 animate-fade-in opacity-60" style={{ animationDelay: "100ms" }} />
+          <Gauge className="h-8 w-8 animate-fade-in opacity-60" style={{ animationDelay: "200ms" }} />
+          <TestTube2 className="h-8 w-8 animate-fade-in opacity-60" style={{ animationDelay: "300ms" }} />
+        </div>
+        <p className="text-xl font-medium text-foreground">Multi-Agent Code Review</p>
+        <p className="mt-2 text-sm leading-relaxed">
           Paste code or enter a GitHub commit URL to get parallel analysis from
-          4 AI agents
+          4 specialized AI agents
         </p>
       </div>
     </div>

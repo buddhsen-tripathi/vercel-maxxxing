@@ -10,23 +10,23 @@ const severityConfig: Record<
 > = {
   critical: {
     label: "Critical",
-    className: "bg-red-600 text-white hover:bg-red-700",
+    className: "bg-severity-critical text-severity-critical-foreground hover:bg-severity-critical/90",
   },
   high: {
     label: "High",
-    className: "bg-orange-500 text-white hover:bg-orange-600",
+    className: "bg-severity-high text-severity-high-foreground hover:bg-severity-high/90",
   },
   medium: {
     label: "Medium",
-    className: "bg-yellow-500 text-black hover:bg-yellow-600",
+    className: "bg-severity-medium text-severity-medium-foreground hover:bg-severity-medium/90",
   },
   low: {
     label: "Low",
-    className: "bg-blue-500 text-white hover:bg-blue-600",
+    className: "bg-severity-low text-severity-low-foreground hover:bg-severity-low/90",
   },
   info: {
     label: "Info",
-    className: "bg-gray-500 text-white hover:bg-gray-600",
+    className: "bg-severity-info text-severity-info-foreground hover:bg-severity-info/90",
   },
 };
 

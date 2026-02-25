@@ -6,11 +6,11 @@ import { SeverityBadge } from "./severity-badge";
 import type { Finding } from "@/agents/schemas";
 
 const borderColors: Record<string, string> = {
-  critical: "border-l-red-600",
-  high: "border-l-orange-500",
-  medium: "border-l-yellow-500",
-  low: "border-l-blue-500",
-  info: "border-l-gray-500",
+  critical: "border-l-severity-critical",
+  high: "border-l-severity-high",
+  medium: "border-l-severity-medium",
+  low: "border-l-severity-low",
+  info: "border-l-severity-info",
 };
 
 interface FindingItemProps {

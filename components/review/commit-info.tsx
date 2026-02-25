@@ -60,10 +60,10 @@ export function CommitInfo({ commit }: { commit: CommitMeta }) {
         </div>
 
         <div className="flex items-center gap-3 text-xs">
-          <span className="font-mono text-green-600">
+          <span className="font-mono text-diff-add">
             +{commit.stats.additions}
           </span>
-          <span className="font-mono text-red-600">
+          <span className="font-mono text-diff-remove">
             -{commit.stats.deletions}
           </span>
           <span className="text-muted-foreground">
@@ -82,8 +82,8 @@ export function CommitInfo({ commit }: { commit: CommitMeta }) {
                   <StatusBadge status={f.status} />
                   <span className="min-w-0 truncate font-mono">{f.filename}</span>
                   <span className="ml-auto shrink-0 text-muted-foreground">
-                    <span className="text-green-600">+{f.additions}</span>{" "}
-                    <span className="text-red-600">-{f.deletions}</span>
+                    <span className="text-diff-add">+{f.additions}</span>{" "}
+                    <span className="text-diff-remove">-{f.deletions}</span>
                   </span>
                 </li>
               ))}

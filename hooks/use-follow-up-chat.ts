@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 export interface ChatMessage {
   id: string;
@@ -21,6 +21,11 @@ export function useFollowUpChat(
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const messagesRef = useRef<ChatMessage[]>(messages);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const loadMessages = useCallback((msgs: ChatMessage[]) => {
     setMessages(msgs);
@@ -45,7 +50,7 @@ export function useFollowUpChat(
         content: "",
       };
 
-      const allMessages = [...messages, userMsg];
+      const allMessages = [...messagesRef.current, userMsg];
       setMessages([...allMessages, assistantMsg]);
       setIsStreaming(true);
 
@@ -120,7 +125,7 @@ export function useFollowUpChat(
           setIsStreaming(false);
         });
     },
-    [conversationId, messages, isStreaming]
+    [conversationId, isStreaming]
   );
 
   return { messages, sendMessage, isStreaming, loadMessages };

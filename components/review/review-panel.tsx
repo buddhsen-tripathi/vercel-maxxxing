@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +8,7 @@ import { AgentCard } from "./agent-card";
 import { FollowUpChat } from "./follow-up-chat";
 import type { AgentReviewResult } from "@/agents/schemas";
 import type { ChatMessage } from "@/hooks/use-follow-up-chat";
+import { BotMessageSquare } from "lucide-react";
 
 const agentTabs: { value: string; label: string }[] = [
   { value: "all", label: "All" },
@@ -33,29 +35,27 @@ export function ReviewPanel({
 }: ReviewPanelProps) {
   if (!isReviewing && results.length === 0) {
     return (
-      <div className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
-        Results will appear here after submitting code.
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-4 text-muted-foreground">
+        <BotMessageSquare className="h-10 w-10 opacity-40" />
+        <p className="text-sm">Results will appear here after submitting code.</p>
       </div>
     );
   }
 
   // Aggregate counts
-  const totalFindings = results.reduce(
-    (acc, r) => acc + (r.result?.findings.length ?? 0),
-    0
-  );
-  const criticalCount = results.reduce(
-    (acc, r) =>
-      acc +
-      (r.result?.findings.filter((f) => f.severity === "critical").length ?? 0),
-    0
-  );
-  const highCount = results.reduce(
-    (acc, r) =>
-      acc +
-      (r.result?.findings.filter((f) => f.severity === "high").length ?? 0),
-    0
-  );
+  const { totalFindings, criticalCount, highCount } = useMemo(() => {
+    let total = 0;
+    let critical = 0;
+    let high = 0;
+    for (const r of results) {
+      for (const f of r.result?.findings ?? []) {
+        total++;
+        if (f.severity === "critical") critical++;
+        else if (f.severity === "high") high++;
+      }
+    }
+    return { totalFindings: total, criticalCount: critical, highCount: high };
+  }, [results]);
 
   return (
     <div className="flex h-full flex-col">
@@ -66,12 +66,12 @@ export function ReviewPanel({
             {totalFindings} findings
           </span>
           {criticalCount > 0 && (
-            <Badge className="bg-red-600 text-white text-[10px]">
+            <Badge className="bg-severity-critical text-severity-critical-foreground text-[10px]">
               {criticalCount} critical
             </Badge>
           )}
           {highCount > 0 && (
-            <Badge className="bg-orange-500 text-white text-[10px]">
+            <Badge className="bg-severity-high text-severity-high-foreground text-[10px]">
               {highCount} high
             </Badge>
           )}

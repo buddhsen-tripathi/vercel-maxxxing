@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback } from "react";
+import { useCallback } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
@@ -12,8 +12,6 @@ interface ChatInputProps {
 }
 
 export function ChatInput({ value, onChange, onSubmit, disabled }: ChatInputProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
@@ -27,7 +25,6 @@ export function ChatInput({ value, onChange, onSubmit, disabled }: ChatInputProp
   return (
     <div className="flex gap-2 border-t p-4">
       <Textarea
-        ref={textareaRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}

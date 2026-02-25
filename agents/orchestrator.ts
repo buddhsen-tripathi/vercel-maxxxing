@@ -4,6 +4,7 @@ import {
   type AgentName,
   type AgentReviewResult,
 } from "./schemas";
+import { agentLabels } from "./constants";
 import { codeReviewerSystemPrompt } from "./code-reviewer";
 import { securityAgentSystemPrompt } from "./security-agent";
 import { performanceAgentSystemPrompt } from "./performance-agent";
@@ -111,7 +112,7 @@ export function formatDiscordSummary(
   const severityCounts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
 
   for (const { agent, result, error } of results) {
-    const label = agentLabels[agent];
+    const label = agentLabels[agent].label;
     if (error || !result) {
       lines.push(`### ${label} -- Error\n${error ?? "No result"}\n`);
       continue;
@@ -146,9 +147,3 @@ export function formatDiscordSummary(
   return summary;
 }
 
-const agentLabels: Record<AgentName, string> = {
-  "code-reviewer": "Code Reviewer",
-  security: "Security Agent",
-  performance: "Performance Agent",
-  testing: "Testing Agent",
-};

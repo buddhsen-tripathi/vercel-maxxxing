@@ -7,42 +7,33 @@ import {
 } from "@/lib/db/queries";
 import { headers } from "next/headers";
 import type { AgentReviewResult } from "@/agents/schemas";
+import { formatReviewContext } from "@/agents/format";
+import { chatLimiter, rateLimitResponse } from "@/lib/rate-limit";
+import { chatInputSchema } from "@/lib/validations";
 
 export const maxDuration = 60;
 
-function formatReviewContext(
-  code: string,
-  results: AgentReviewResult[]
-): string {
-  let context = `## Original Code Under Review\n\`\`\`\n${code}\n\`\`\`\n\n`;
-  context += `## Review Results\n\n`;
-  for (const r of results) {
-    context += `### ${r.agent} (Score: ${r.result?.score ?? "N/A"}/10)\n`;
-    context += `${r.result?.summary ?? "No summary"}\n\n`;
-    for (const f of r.result?.findings ?? []) {
-      context += `- **[${f.severity.toUpperCase()}] ${f.title}**${f.lineReference ? ` (${f.lineReference})` : ""}: ${f.description}\n  Suggestion: ${f.suggestion}\n`;
-    }
-    context += "\n";
-  }
-  return context;
-}
-
 export async function POST(req: Request) {
-  const body: {
-    messages: { role: "user" | "assistant"; content: string }[];
-    conversationId: string;
-  } = await req.json();
-
-  const { messages, conversationId } = body;
-  if (!conversationId || !messages?.length) {
-    return Response.json({ error: "Missing data" }, { status: 400 });
+  const raw = await req.json();
+  const parsed = chatInputSchema.safeParse(raw);
+  if (!parsed.success) {
+    return Response.json(
+      { error: parsed.error.issues.map((i) => i.message).join(", ") },
+      { status: 400 }
+    );
   }
+
+  const { messages, conversationId } = parsed.data;
 
   // Auth check
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Rate limit check
+  const rl = chatLimiter(`user:${session.user.id}`);
+  if (!rl.allowed) return rateLimitResponse(rl.resetMs);
 
   // Load conversation context from DB
   const conv = await getConversationById(conversationId);

@@ -9,22 +9,40 @@ import {
 } from "@/lib/github";
 import type { AgentReviewResult } from "@/agents/schemas";
 import { headers } from "next/headers";
+import {
+  reviewLimiter,
+  getRateLimitKey,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
+import { reviewInputSchema } from "@/lib/validations";
 
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  const body: { code?: string; commitUrl?: string; conversationId?: string } =
-    await req.json();
-
-  const { code, commitUrl, conversationId } = body;
-
-  // Must provide either code or commitUrl
-  if (!code?.trim() && !commitUrl?.trim()) {
+  const raw = await req.json();
+  const parsed = reviewInputSchema.safeParse(raw);
+  if (!parsed.success) {
     return Response.json(
-      { error: "No code or commit URL provided" },
+      { error: parsed.error.issues.map((i) => i.message).join(", ") },
       { status: 400 }
     );
   }
+
+  const { code, commitUrl, conversationId } = parsed.data;
+
+  // Get session (optional - don't block if no auth)
+  let userId: string | null = null;
+  try {
+    const session = await auth.api.getSession({ headers: await headers() });
+    userId = session?.user?.id ?? null;
+  } catch {
+    // Continue without auth
+  }
+
+  // Rate limit check
+  const rlKey = getRateLimitKey(req, userId);
+  const rl = reviewLimiter(rlKey);
+  if (!rl.allowed) return rateLimitResponse(rl.resetMs);
 
   // If commitUrl, fetch the commit diff
   let commitData: CommitData | null = null;
@@ -51,15 +69,6 @@ export async function POST(req: Request) {
     reviewInput = commitData.diff;
   } else {
     reviewInput = code!;
-  }
-
-  // Get session (optional - don't block if no auth)
-  let userId: string | null = null;
-  try {
-    const session = await auth.api.getSession({ headers: await headers() });
-    userId = session?.user?.id ?? null;
-  } catch {
-    // Continue without auth
   }
 
   const encoder = new TextEncoder();
