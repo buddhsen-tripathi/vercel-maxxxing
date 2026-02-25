@@ -2,7 +2,7 @@
 
 A multi-agent code review system that runs 4 specialized AI agents in parallel to analyze code snippets and GitHub commits. Built with Next.js, AI SDK, and deployed on Vercel.
 
-**Built in ~2.5 hours** across 7 incremental phases using [Claude Code](https://claude.ai/claude-code) — from `create-next-app` scaffold to a production-ready app with auth, database, multi-agent AI, Discord bot, rate limiting, and a polished UI.
+**Built in ~3 hours** across 7 incremental phases using [Claude Code](https://claude.ai/claude-code) — from `create-next-app` scaffold to a production-ready app with auth, database, multi-agent AI, Discord bot, rate limiting, and a polished UI.
 
 ## Features
 
