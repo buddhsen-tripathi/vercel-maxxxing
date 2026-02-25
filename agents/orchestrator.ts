@@ -106,7 +106,7 @@ export async function runMultiAgentReviewStreaming(
 export function formatDiscordSummary(
   results: AgentReviewResult[]
 ): string {
-  const lines: string[] = ["## Code Review Summary\n"];
+  const lines: string[] = ["**Code Review Summary**\n"];
 
   let totalFindings = 0;
   const severityCounts = { critical: 0, high: 0, medium: 0, low: 0, info: 0 };
@@ -114,19 +114,18 @@ export function formatDiscordSummary(
   for (const { agent, result, error } of results) {
     const label = agentLabels[agent].label;
     if (error || !result) {
-      lines.push(`### ${label} -- Error\n${error ?? "No result"}\n`);
+      lines.push(`**${label}** — Error: ${error ?? "No result"}`);
       continue;
     }
 
-    lines.push(`### ${label} — Score: ${result.score}/10`);
+    lines.push(`**${label}** — ${result.score}/10`);
 
     for (const f of result.findings) {
       totalFindings++;
       severityCounts[f.severity]++;
-      const ref = f.lineReference ? ` (${f.lineReference})` : "";
-      lines.push(
-        `- **${f.severity.charAt(0).toUpperCase() + f.severity.slice(1)}**: ${f.title}${ref} — ${f.suggestion}`
-      );
+      const sev = f.severity.toUpperCase();
+      const ref = f.lineReference ? ` \`${f.lineReference}\`` : "";
+      lines.push(`- ${sev}: ${f.title}${ref}`);
     }
     lines.push("");
   }
@@ -136,14 +135,8 @@ export function formatDiscordSummary(
     .map(([k, v]) => `${v} ${k}`)
     .join(", ");
 
-  lines.push(`**Overall**: ${totalFindings} findings (${counts})`);
+  lines.push(`${totalFindings} findings (${counts})`);
 
-  // Respect Discord's 2000-char limit
-  let summary = lines.join("\n");
-  if (summary.length > 1950) {
-    summary = summary.slice(0, 1950) + "\n\n... (truncated)";
-  }
-
-  return summary;
+  return lines.join("\n");
 }
 
