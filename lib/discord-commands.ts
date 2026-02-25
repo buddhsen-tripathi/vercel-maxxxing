@@ -33,6 +33,17 @@ interface CommandContext {
 }
 
 const DISCORD_API = "https://discord.com/api/v10";
+const REVIEW_TIMEOUT_MS = 50_000; // 50s — leave buffer before function dies
+
+/** Race a promise against a timeout */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+    ),
+  ]);
+}
 
 /** Send a follow-up message to a deferred interaction */
 async function followUp(ctx: CommandContext, content: string) {
@@ -193,6 +204,8 @@ async function handleReview(ctx: CommandContext) {
   }
 
   try {
+    console.log("[discord] /review started", { hasCode: !!code, hasCommitUrl: !!commitUrl });
+
     let reviewInput: string;
     let title: string;
 
@@ -202,6 +215,7 @@ async function handleReview(ctx: CommandContext) {
         await followUp(ctx, "**Invalid commit URL format.** Use a GitHub commit URL like `https://github.com/owner/repo/commit/sha`");
         return;
       }
+      console.log("[discord] fetching commit data...");
       const commitData = await fetchCommitData(parsed.owner, parsed.repo, parsed.sha);
       reviewInput = commitData.diff;
       title = commitData.message.split("\n")[0].slice(0, 80);
@@ -210,7 +224,13 @@ async function handleReview(ctx: CommandContext) {
       title = code!.slice(0, 80).replace(/\n/g, " ");
     }
 
-    const results = await runMultiAgentReview(reviewInput);
+    console.log("[discord] running multi-agent review...");
+    const results = await withTimeout(
+      runMultiAgentReview(reviewInput),
+      REVIEW_TIMEOUT_MS,
+      "Code review"
+    );
+    console.log("[discord] review complete, formatting...");
     const summary = formatDiscordSummary(results);
 
     // Save to DB if user is linked
@@ -235,8 +255,11 @@ async function handleReview(ctx: CommandContext) {
       convIdNote = `\n\n_Review saved. Use \`/followup message:your question\` to ask about it, or \`/followup message:... id:${convId}\` to reference it later._`;
     }
 
+    console.log("[discord] sending review results...");
     await followUp(ctx, summary + convIdNote);
+    console.log("[discord] /review done");
   } catch (err) {
+    console.error("[discord] /review error:", err);
     const msg = err instanceof Error ? err.message : String(err);
     await followUp(ctx, `**Review failed:** ${msg}`);
   }
@@ -314,11 +337,15 @@ Be concise but thorough. Use markdown formatting. When referencing findings, quo
     // Add the new user message
     chatMessages.push({ role: "user", content: userMessage });
 
-    const { text } = await generateText({
-      model: gateway("openai/gpt-5-nano"),
-      system: systemPrompt,
-      messages: chatMessages,
-    });
+    const { text } = await withTimeout(
+      generateText({
+        model: gateway("openai/gpt-5-nano"),
+        system: systemPrompt,
+        messages: chatMessages,
+      }),
+      REVIEW_TIMEOUT_MS,
+      "Follow-up generation"
+    );
 
     // Save messages to DB
     await createMessage({

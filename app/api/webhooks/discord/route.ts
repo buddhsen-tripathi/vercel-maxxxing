@@ -100,15 +100,37 @@ export async function POST(request: Request) {
 
     const applicationId = process.env.DISCORD_APPLICATION_ID ?? "";
 
+    const ctx = {
+      commandName: data.name,
+      options,
+      user,
+      token: interaction.token as string,
+      applicationId,
+    };
+
     // Defer first, then process in background
     after(async () => {
-      await handleSlashCommand({
-        commandName: data.name,
-        options,
-        user,
-        token: interaction.token as string,
-        applicationId,
-      });
+      try {
+        await handleSlashCommand(ctx);
+      } catch (err) {
+        console.error("[discord] slash command crashed:", err);
+        // Last-resort follow-up so user sees the error
+        try {
+          const msg = err instanceof Error ? err.message : String(err);
+          await fetch(
+            `https://discord.com/api/v10/webhooks/${applicationId}/${ctx.token}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                content: `**Command failed:** ${msg.slice(0, 1900)}`,
+              }),
+            }
+          );
+        } catch {
+          // Nothing more we can do
+        }
+      }
     });
 
     return Response.json({ type: RESPONSE_DEFERRED });
