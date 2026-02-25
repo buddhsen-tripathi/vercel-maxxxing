@@ -205,8 +205,8 @@ async function handleReview(ctx: CommandContext) {
   }
 
   try {
-    // Send immediate progress message
-    await followUp(ctx, "Reviewing your code...");
+    // Edit the deferred "thinking..." placeholder with a progress message
+    await editOriginal(ctx, "Reviewing your code...");
 
     let reviewInput: string;
     let title: string;
@@ -250,6 +250,7 @@ async function handleReview(ctx: CommandContext) {
       convIdNote = `\n\n_Review saved. Use \`/followup message:your question\` to ask about it, or \`/followup message:... id:${convId}\` to reference it later._`;
     }
 
+    // Edit the original message with results (replaces "Reviewing your code...")
     await editOriginal(ctx, summary + convIdNote);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";

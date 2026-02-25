@@ -110,7 +110,15 @@ export function DiscordLinkCard() {
         </CardTitle>
         <CardDescription>
           Link your Discord account so <code>/summary</code> shows your personal
-          reviews.
+          reviews.{" "}
+          <a
+            href="https://discord.com/oauth2/authorize?client_id=1475996370224545914&scope=bot+applications.commands"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline underline-offset-2 hover:text-primary/80"
+          >
+            Add bot to your server
+          </a>
         </CardDescription>
       </CardHeader>
       <CardContent>
