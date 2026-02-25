@@ -48,6 +48,42 @@ const commands = [
     name: "disconnect",
     description: "Unlink your Discord account from the CodeReview web app",
   },
+  {
+    name: "review",
+    description: "Run a multi-agent code review",
+    options: [
+      {
+        name: "code",
+        description: "Paste code to review",
+        type: 3, // STRING
+        required: false,
+      },
+      {
+        name: "commit_url",
+        description: "GitHub commit URL (e.g. https://github.com/owner/repo/commit/sha)",
+        type: 3, // STRING
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "followup",
+    description: "Ask a follow-up question about a code review",
+    options: [
+      {
+        name: "message",
+        description: "Your follow-up question",
+        type: 3, // STRING
+        required: true,
+      },
+      {
+        name: "id",
+        description: "Optional conversation ID (defaults to your latest review)",
+        type: 3, // STRING
+        required: false,
+      },
+    ],
+  },
 ];
 
 async function register() {

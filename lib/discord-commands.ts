@@ -7,8 +7,17 @@ import {
   getDiscordLinkByCode,
   confirmDiscordLink,
   deleteDiscordLink,
+  createConversation,
+  createMessage,
 } from "@/lib/db/queries";
-import { formatDiscordSummary } from "@/agents/orchestrator";
+import {
+  formatDiscordSummary,
+  runMultiAgentReview,
+} from "@/agents/orchestrator";
+import { formatReviewContext } from "@/agents/format";
+import { parseCommitInput, fetchCommitData } from "@/lib/github";
+import { generateText, gateway } from "ai";
+import type { AgentReviewResult } from "@/agents/schemas";
 
 interface DiscordUser {
   id: string;
@@ -37,6 +46,18 @@ async function followUp(ctx: CommandContext, content: string) {
   );
 }
 
+/** Edit the original deferred response (replaces "Reviewing...") */
+async function editOriginal(ctx: CommandContext, content: string) {
+  await fetch(
+    `${DISCORD_API}/webhooks/${ctx.applicationId}/${ctx.token}/messages/@original`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    }
+  );
+}
+
 export async function handleSlashCommand(ctx: CommandContext) {
   switch (ctx.commandName) {
     case "summary":
@@ -45,6 +66,10 @@ export async function handleSlashCommand(ctx: CommandContext) {
       return handleConnect(ctx);
     case "disconnect":
       return handleDisconnect(ctx);
+    case "review":
+      return handleReview(ctx);
+    case "followup":
+      return handleFollowUp(ctx);
     default:
       await followUp(ctx, "Unknown command.");
   }
@@ -162,5 +187,176 @@ async function handleDisconnect(ctx: CommandContext) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     await followUp(ctx, `**Error unlinking account:** ${msg}`);
+  }
+}
+
+async function handleReview(ctx: CommandContext) {
+  const code = ctx.options.code;
+  const commitUrl = ctx.options.commit_url;
+
+  if (!code && !commitUrl) {
+    await followUp(
+      ctx,
+      "Please provide either `code` or `commit_url`.\n" +
+        "Example: `/review code:function add(a,b){return a+b}`\n" +
+        "Example: `/review commit_url:https://github.com/owner/repo/commit/abc123`"
+    );
+    return;
+  }
+
+  try {
+    // Send immediate progress message
+    await followUp(ctx, "Reviewing your code...");
+
+    let reviewInput: string;
+    let title: string;
+
+    if (commitUrl) {
+      const parsed = parseCommitInput(commitUrl);
+      if (!parsed) {
+        await editOriginal(ctx, "**Invalid commit URL format.** Use a GitHub commit URL like `https://github.com/owner/repo/commit/sha`");
+        return;
+      }
+      const commitData = await fetchCommitData(parsed.owner, parsed.repo, parsed.sha);
+      reviewInput = commitData.diff;
+      title = commitData.message.split("\n")[0].slice(0, 80);
+    } else {
+      reviewInput = code!;
+      title = code!.slice(0, 80).replace(/\n/g, " ");
+    }
+
+    const results = await runMultiAgentReview(reviewInput);
+    const summary = formatDiscordSummary(results);
+
+    // Save to DB if user is linked
+    let convIdNote = "";
+    const userId = await getUserIdByDiscordId(ctx.user.id);
+    if (userId) {
+      const convId = crypto.randomUUID();
+      await createConversation({ id: convId, title, userId });
+      await createMessage({
+        id: crypto.randomUUID(),
+        conversationId: convId,
+        role: "user",
+        content: reviewInput,
+      });
+      await createMessage({
+        id: crypto.randomUUID(),
+        conversationId: convId,
+        role: "assistant",
+        content: "Multi-agent review complete",
+        metadata: JSON.stringify(results),
+      });
+      convIdNote = `\n\n_Review saved. Use \`/followup message:your question\` to ask about it, or \`/followup message:... id:${convId}\` to reference it later._`;
+    }
+
+    await editOriginal(ctx, summary + convIdNote);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    await editOriginal(ctx, `**Review failed:** ${msg}`);
+  }
+}
+
+async function handleFollowUp(ctx: CommandContext) {
+  const userMessage = ctx.options.message;
+  const convId = ctx.options.id;
+
+  if (!userMessage) {
+    await followUp(ctx, "Please provide a message: `/followup message:your question`");
+    return;
+  }
+
+  try {
+    const userId = await getUserIdByDiscordId(ctx.user.id);
+    if (!userId) {
+      await followUp(
+        ctx,
+        "**Account not linked.** `/followup` needs access to your reviews.\n" +
+          "Link your account: go to **Settings** in the web app, generate a code, then use `/connect CODE` here."
+      );
+      return;
+    }
+
+    // Load conversation
+    let conversation;
+    if (convId) {
+      conversation = await getConversationById(convId);
+      if (!conversation || conversation.userId !== userId) {
+        await followUp(ctx, `**Not found** — no review with ID \`${convId}\` in your account.`);
+        return;
+      }
+    } else {
+      const latest = await getLatestReviewByUser(userId);
+      if (!latest) {
+        await followUp(ctx, "No reviews found. Run `/review` first!");
+        return;
+      }
+      conversation = latest.conversation;
+    }
+
+    // Load messages to build context
+    const dbMessages = await getMessagesByConversation(conversation.id);
+    const userMsg = dbMessages.find((m) => m.role === "user");
+    const assistantMsg = dbMessages.find(
+      (m) => m.role === "assistant" && m.metadata
+    );
+
+    const codeContent = userMsg?.content ?? "";
+    let reviewResults: AgentReviewResult[] = [];
+    if (assistantMsg?.metadata) {
+      try {
+        reviewResults = JSON.parse(assistantMsg.metadata);
+      } catch {
+        // Invalid JSON, proceed with empty results
+      }
+    }
+
+    const systemPrompt = `You are a helpful code review assistant. You have full context of a multi-agent code review. Answer follow-up questions about the findings, explain issues, suggest fixes, or discuss the code.
+
+${formatReviewContext(codeContent, reviewResults)}
+
+Be concise but thorough. Use markdown formatting. When referencing findings, quote them precisely. When suggesting code fixes, use fenced code blocks.`;
+
+    // Build conversation history for context
+    const chatMessages = dbMessages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .filter((m) => !m.metadata || m.role === "user")
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+      }));
+
+    // Add the new user message
+    chatMessages.push({ role: "user", content: userMessage });
+
+    const { text } = await generateText({
+      model: gateway("openai/gpt-5-nano"),
+      system: systemPrompt,
+      messages: chatMessages,
+    });
+
+    // Save messages to DB
+    await createMessage({
+      id: crypto.randomUUID(),
+      conversationId: conversation.id,
+      role: "user",
+      content: userMessage,
+    });
+    await createMessage({
+      id: crypto.randomUUID(),
+      conversationId: conversation.id,
+      role: "assistant",
+      content: text,
+    });
+
+    // Truncate to Discord's 2000-char limit
+    const response = text.length > 1950
+      ? text.slice(0, 1950) + "\n\n... (truncated)"
+      : text;
+
+    await followUp(ctx, response);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    await followUp(ctx, `**Follow-up failed:** ${msg}`);
   }
 }
