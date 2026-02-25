@@ -2,7 +2,7 @@ import { getBot } from "@/lib/bot";
 import { handleSlashCommand } from "@/lib/discord-commands";
 import { after } from "next/server";
 
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 const INTERACTION_TYPE_PING = 1;
 const INTERACTION_TYPE_APPLICATION_COMMAND = 2;
@@ -113,32 +113,48 @@ export async function POST(request: Request) {
       options,
     });
 
-    // Defer first, then process in background
-    after(async () => {
-      console.log(`[discord] after() started for /${data.name}`);
-      try {
-        await handleSlashCommand(ctx);
-        console.log(`[discord] after() completed for /${data.name}`);
-      } catch (err) {
-        console.error("[discord] slash command crashed:", err);
-        // Last-resort follow-up so user sees the error
+    // Slow commands (/review, /followup) get dispatched to a dedicated
+    // serverless function with its own maxDuration, avoiding after()'s limits.
+    const slowCommands = ["review", "followup"];
+    if (slowCommands.includes(data.name)) {
+      const baseUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
+      console.log(`[discord] dispatching /${data.name} to /api/discord/process`);
+      // Fire-and-forget: don't await, the other function handles everything
+      fetch(`${baseUrl}/api/discord/process`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-secret": process.env.BETTER_AUTH_SECRET ?? "",
+        },
+        body: JSON.stringify(ctx),
+      }).catch((err) => {
+        console.error(`[discord] dispatch fetch failed:`, err);
+      });
+    } else {
+      // Fast commands (/summary, /connect, /disconnect) run in after()
+      after(async () => {
         try {
-          const msg = err instanceof Error ? err.message : String(err);
-          await fetch(
-            `https://discord.com/api/v10/webhooks/${applicationId}/${ctx.token}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                content: `**Command failed:** ${msg.slice(0, 1900)}`,
-              }),
-            }
-          );
-        } catch {
-          // Nothing more we can do
+          await handleSlashCommand(ctx);
+        } catch (err) {
+          console.error("[discord] slash command crashed:", err);
+          try {
+            const msg = err instanceof Error ? err.message : String(err);
+            await fetch(
+              `https://discord.com/api/v10/webhooks/${applicationId}/${ctx.token}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  content: `**Command failed:** ${msg.slice(0, 1900)}`,
+                }),
+              }
+            );
+          } catch {
+            // Nothing more we can do
+          }
         }
-      }
-    });
+      });
+    }
 
     return Response.json({ type: RESPONSE_DEFERRED });
   }
