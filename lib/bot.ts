@@ -2,6 +2,7 @@ import { Chat, walkAst, isCodeNode } from "chat";
 import { createDiscordAdapter } from "@chat-adapter/discord";
 import { createMemoryState } from "@chat-adapter/state-memory";
 import { runMultiAgentReview, formatDiscordSummary } from "@/agents/orchestrator";
+import { parseCommitInput, fetchCommitData } from "@/lib/github";
 import type { Content } from "mdast";
 
 let _bot: Chat | null = null;
@@ -32,17 +33,20 @@ export function getBot(): Chat | null {
     state: createMemoryState(),
   });
 
-  // Handle @mentions with code blocks
+  // Handle @mentions with code blocks or GitHub commit URLs
   _bot.onNewMention(async (thread, message) => {
     const code =
       extractCodeFromFormatted(message.formatted) ??
       extractCodeFromText(message.text);
+    const commitRef = extractCommitRef(message.text);
 
-    if (!code) {
+    if (!code && !commitRef) {
       await thread.post({
         markdown:
-          "Please include a code block (wrapped in \\`\\`\\`) for me to review.\n\n" +
-          "**Example:**\n````\n```js\nfunction add(a, b) { return a + b; }\n```\n````",
+          "Please include a **code block** or a **GitHub commit URL** for me to review.\n\n" +
+          "**Examples:**\n" +
+          "````\n```js\nfunction add(a, b) { return a + b; }\n```\n````\n" +
+          "or\n`https://github.com/owner/repo/commit/abc123`",
       });
       return;
     }
@@ -50,7 +54,21 @@ export function getBot(): Chat | null {
     await thread.startTyping();
 
     try {
-      const results = await runMultiAgentReview(code);
+      let reviewInput: string;
+
+      if (commitRef) {
+        const commitData = await fetchCommitData(
+          commitRef.owner,
+          commitRef.repo,
+          commitRef.sha
+        );
+        const header = `Commit: ${commitData.sha.slice(0, 7)} — ${commitData.message.split("\n")[0]}\n\n`;
+        reviewInput = header + commitData.diff;
+      } else {
+        reviewInput = code!;
+      }
+
+      const results = await runMultiAgentReview(reviewInput);
       const summary = formatDiscordSummary(results);
       await thread.post({ markdown: summary });
     } catch (err) {
@@ -92,4 +110,23 @@ function extractCodeFromText(text: string): string | null {
   return matches
     .map((block) => block.replace(/^```\w*\n?/, "").replace(/\n?```$/, ""))
     .join("\n\n");
+}
+
+/**
+ * Extract a GitHub commit URL or owner/repo@sha shorthand from message text.
+ * Returns null if no commit reference is found.
+ */
+function extractCommitRef(
+  text: string
+): { owner: string; repo: string; sha: string } | null {
+  // Strip code blocks so we don't match URLs inside them
+  const stripped = text.replace(/```[\s\S]*?```/g, "");
+  const words = stripped.split(/\s+/);
+
+  for (const word of words) {
+    const parsed = parseCommitInput(word);
+    if (parsed) return parsed;
+  }
+
+  return null;
 }
