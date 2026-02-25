@@ -49,8 +49,8 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 async function followUp(ctx: CommandContext, content: string) {
   // Discord enforces a 2000-char limit on message content
   const truncated =
-    content.length > 1990
-      ? content.slice(0, 1990) + "\n…(truncated)"
+    content.length > 2000
+      ? content.slice(0, 1985) + "\n…(truncated)"
       : content;
 
   console.log(`[discord] followUp: sending ${truncated.length} chars to Discord API...`);
