@@ -108,10 +108,17 @@ export async function POST(request: Request) {
       applicationId,
     };
 
+    console.log(`[discord] webhook received: /${data.name}`, {
+      user: user.username,
+      options,
+    });
+
     // Defer first, then process in background
     after(async () => {
+      console.log(`[discord] after() started for /${data.name}`);
       try {
         await handleSlashCommand(ctx);
+        console.log(`[discord] after() completed for /${data.name}`);
       } catch (err) {
         console.error("[discord] slash command crashed:", err);
         // Last-resort follow-up so user sees the error

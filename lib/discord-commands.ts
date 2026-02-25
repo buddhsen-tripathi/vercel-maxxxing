@@ -33,7 +33,7 @@ interface CommandContext {
 }
 
 const DISCORD_API = "https://discord.com/api/v10";
-const REVIEW_TIMEOUT_MS = 50_000; // 50s — leave buffer before function dies
+const REVIEW_TIMEOUT_MS = 55_000; // 55s — leave buffer before 60s function limit
 
 /** Race a promise against a timeout */
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -53,6 +53,8 @@ async function followUp(ctx: CommandContext, content: string) {
       ? content.slice(0, 1990) + "\n…(truncated)"
       : content;
 
+  console.log(`[discord] followUp: sending ${truncated.length} chars to Discord API...`);
+
   const res = await fetch(
     `${DISCORD_API}/webhooks/${ctx.applicationId}/${ctx.token}`,
     {
@@ -62,13 +64,19 @@ async function followUp(ctx: CommandContext, content: string) {
     }
   );
 
-  if (!res.ok) {
+  if (res.ok) {
+    console.log(`[discord] followUp: success (${res.status})`);
+  } else {
     const body = await res.text().catch(() => "");
-    console.error(`[discord] followUp failed: ${res.status} ${body}`);
+    console.error(`[discord] followUp: FAILED ${res.status} — ${body}`);
   }
 }
 
 export async function handleSlashCommand(ctx: CommandContext) {
+  console.log(`[discord] handleSlashCommand: /${ctx.commandName}`, {
+    options: ctx.options,
+    user: ctx.user.username,
+  });
   switch (ctx.commandName) {
     case "summary":
       return handleSummary(ctx);
@@ -214,8 +222,16 @@ async function handleReview(ctx: CommandContext) {
     return;
   }
 
+  const t0 = Date.now();
+  const elapsed = () => `${Date.now() - t0}ms`;
+
   try {
-    console.log("[discord] /review started", { hasCode: !!code, hasCommitUrl: !!commitUrl });
+    console.log(`[discord] /review START`, {
+      hasCode: !!code,
+      codeLength: code?.length,
+      hasCommitUrl: !!commitUrl,
+      user: ctx.user.username,
+    });
 
     let reviewInput: string;
     let title: string;
@@ -226,8 +242,9 @@ async function handleReview(ctx: CommandContext) {
         await followUp(ctx, "**Invalid commit URL format.** Use a GitHub commit URL like `https://github.com/owner/repo/commit/sha`");
         return;
       }
-      console.log("[discord] fetching commit data...");
+      console.log(`[discord] /review [${elapsed()}] fetching commit data...`);
       const commitData = await fetchCommitData(parsed.owner, parsed.repo, parsed.sha);
+      console.log(`[discord] /review [${elapsed()}] commit fetched, diff length: ${commitData.diff.length}`);
       reviewInput = commitData.diff;
       title = commitData.message.split("\n")[0].slice(0, 80);
     } else {
@@ -235,20 +252,22 @@ async function handleReview(ctx: CommandContext) {
       title = code!.slice(0, 80).replace(/\n/g, " ");
     }
 
-    console.log("[discord] running multi-agent review...");
+    console.log(`[discord] /review [${elapsed()}] running multi-agent review (input: ${reviewInput.length} chars)...`);
     const results = await withTimeout(
       runMultiAgentReview(reviewInput),
       REVIEW_TIMEOUT_MS,
       "Code review"
     );
-    console.log("[discord] review complete, formatting...");
+    console.log(`[discord] /review [${elapsed()}] review complete — ${results.length} agents returned`);
     const summary = formatDiscordSummary(results);
+    console.log(`[discord] /review [${elapsed()}] summary formatted: ${summary.length} chars`);
 
     // Save to DB if user is linked
     let convIdNote = "";
     const userId = await getUserIdByDiscordId(ctx.user.id);
     if (userId) {
       const convId = crypto.randomUUID();
+      console.log(`[discord] /review [${elapsed()}] saving to DB as ${convId}...`);
       await createConversation({ id: convId, title, userId });
       await createMessage({
         id: crypto.randomUUID(),
@@ -263,14 +282,16 @@ async function handleReview(ctx: CommandContext) {
         content: "Multi-agent review complete",
         metadata: JSON.stringify(results),
       });
-      convIdNote = `\n\n_Review saved. Use \`/followup message:your question\` to ask about it, or \`/followup message:... id:${convId}\` to reference it later._`;
+      console.log(`[discord] /review [${elapsed()}] DB saved`);
+      convIdNote = `\n\n_Use \`/followup message:your question\` to ask about this review._`;
     }
 
-    console.log("[discord] sending review results...");
-    await followUp(ctx, summary + convIdNote);
-    console.log("[discord] /review done");
+    const finalMessage = summary + convIdNote;
+    console.log(`[discord] /review [${elapsed()}] sending followUp (${finalMessage.length} chars)...`);
+    await followUp(ctx, finalMessage);
+    console.log(`[discord] /review [${elapsed()}] DONE`);
   } catch (err) {
-    console.error("[discord] /review error:", err);
+    console.error(`[discord] /review [${elapsed()}] ERROR:`, err);
     const msg = err instanceof Error ? err.message : String(err);
     await followUp(ctx, `**Review failed:** ${msg}`);
   }
