@@ -2,7 +2,7 @@
 
 A multi-agent code review system that runs 4 specialized AI agents in parallel to analyze code snippets and GitHub commits. Built with Next.js, AI SDK, and deployed on Vercel.
 
-**Built in ~1 hour** across 7 incremental phases using [Claude Code](https://claude.ai/claude-code) — from `create-next-app` scaffold to a production-ready app with auth, database, multi-agent AI, Discord bot, rate limiting, and a polished UI.
+**Built in ~2.5 hours** across 7 incremental phases using [Claude Code](https://claude.ai/claude-code) — from `create-next-app` scaffold to a production-ready app with auth, database, multi-agent AI, Discord bot, rate limiting, and a polished UI.
 
 ## Features
 
@@ -10,7 +10,7 @@ A multi-agent code review system that runs 4 specialized AI agents in parallel t
 - **GitHub commit review** — paste a commit URL or shorthand (`owner/repo@sha`) to review diffs directly from GitHub
 - **Follow-up chat** — ask context-aware follow-up questions about any review
 - **Conversation history** — all reviews are saved and browsable for authenticated users
-- **Discord bot** — mention the bot with a code block in Discord to get a review summary
+- **Discord bot** — `/review` to run reviews, `/followup` to ask questions, `/summary` to view results, plus @mention support
 - **Real-time streaming** — agent results stream to the UI via SSE as each completes
 - **Rate limiting** — sliding-window in-memory rate limiter on all AI endpoints
 - **Input validation** — Zod schemas on every API route
@@ -174,6 +174,7 @@ lib/
 ├── auth.ts                     # Better Auth server config
 ├── auth-client.ts              # Client-side auth helpers
 ├── bot.ts                      # Discord bot (lazy init)
+├── discord-commands.ts         # Discord slash command handlers
 ├── github.ts                   # GitHub commit fetching & diff parsing
 ├── rate-limit.ts               # Sliding-window rate limiter
 ├── validations.ts              # Zod input schemas
@@ -212,7 +213,24 @@ Agent results and commit metadata are stored as JSON in message metadata.
 
 The bot is optional. If `DISCORD_BOT_TOKEN`, `DISCORD_PUBLIC_KEY`, and `DISCORD_APPLICATION_ID` are set, the bot activates automatically.
 
-**Usage:** Mention the bot in a Discord channel with a fenced code block:
+### Slash Commands
+
+| Command | Description |
+|---|---|
+| `/review code:<snippet>` | Run a multi-agent review on pasted code |
+| `/review commit_url:<url>` | Review a GitHub commit diff |
+| `/followup message:<question>` | Ask a follow-up question about your latest review |
+| `/followup message:<question> id:<convId>` | Ask about a specific review |
+| `/summary` | Show your latest review summary (or global if unlinked) |
+| `/summary id:<convId>` | Show a specific review summary |
+| `/connect code:<CODE>` | Link your Discord account to the web app |
+| `/disconnect` | Unlink your Discord account |
+
+Register commands with `npx tsx scripts/register-discord-commands.ts`.
+
+### @Mention
+
+You can also mention the bot with a fenced code block for a quick review:
 
 ```
 @CodeReviewBot
@@ -223,7 +241,7 @@ def login(password):
 \`\`\`
 ```
 
-The bot replies with a formatted summary of all 4 agent findings, truncated to fit Discord's 2000-character limit.
+The bot replies with a formatted summary of all 4 agent findings, truncated to fit Discord's 2000-character limit. Linked users get reviews saved to their account for follow-up via `/followup`.
 
 ## Deployment
 
