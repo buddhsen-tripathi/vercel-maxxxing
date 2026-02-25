@@ -46,18 +46,6 @@ async function followUp(ctx: CommandContext, content: string) {
   );
 }
 
-/** Edit the original deferred response (replaces "Reviewing...") */
-async function editOriginal(ctx: CommandContext, content: string) {
-  await fetch(
-    `${DISCORD_API}/webhooks/${ctx.applicationId}/${ctx.token}/messages/@original`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
-    }
-  );
-}
-
 export async function handleSlashCommand(ctx: CommandContext) {
   switch (ctx.commandName) {
     case "summary":
@@ -205,16 +193,13 @@ async function handleReview(ctx: CommandContext) {
   }
 
   try {
-    // Edit the deferred "thinking..." placeholder with a progress message
-    await editOriginal(ctx, "Reviewing your code...");
-
     let reviewInput: string;
     let title: string;
 
     if (commitUrl) {
       const parsed = parseCommitInput(commitUrl);
       if (!parsed) {
-        await editOriginal(ctx, "**Invalid commit URL format.** Use a GitHub commit URL like `https://github.com/owner/repo/commit/sha`");
+        await followUp(ctx, "**Invalid commit URL format.** Use a GitHub commit URL like `https://github.com/owner/repo/commit/sha`");
         return;
       }
       const commitData = await fetchCommitData(parsed.owner, parsed.repo, parsed.sha);
@@ -250,11 +235,10 @@ async function handleReview(ctx: CommandContext) {
       convIdNote = `\n\n_Review saved. Use \`/followup message:your question\` to ask about it, or \`/followup message:... id:${convId}\` to reference it later._`;
     }
 
-    // Edit the original message with results (replaces "Reviewing your code...")
-    await editOriginal(ctx, summary + convIdNote);
+    await followUp(ctx, summary + convIdNote);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    await editOriginal(ctx, `**Review failed:** ${msg}`);
+    const msg = err instanceof Error ? err.message : String(err);
+    await followUp(ctx, `**Review failed:** ${msg}`);
   }
 }
 
